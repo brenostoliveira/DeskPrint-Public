@@ -1,0 +1,22 @@
+# Public source and notices only; binary releases are GitHub assets.
+*.exe
+*.dll
+*.pyd
+*.so
+*.dpspkg
+*.dpscontrol
+*.dpsdesktop
+*.apk
+*.ipa
+*.pem
+*.key
+*.pfx
+*.p12
+*.local.json
+.env
+.env.*
+__pycache__/
+.venv/
+node_modules/
+build/
+dist/
