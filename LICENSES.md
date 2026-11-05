@@ -14,10 +14,8 @@ Retain the notices and terms provided with each component.
 | `sources/creality/hi/source/aurora/aurora_identity.py` | GPL-3.0-or-later |
 | `sources/creality/hi/source/web/studio_orca.py` | MIT |
 | `sources/creality/hi/build_open.py` | MIT |
-| `sources/creality/hi/source/aurora/qrcode/` | Retain the supplied qrcode BSD/MIT notices |
 
-Full texts are in the source snapshot's `COPYING`, `MIT-LICENSE.txt`,
-`qrcode-LICENSE.txt`, and the dependency's own `LICENSE` file. File notices and
+Full texts are in the source snapshot's `COPYING`, `MIT-LICENSE.txt`.
 third-party exceptions remain applicable. Build information records dependencies;
 their individual licenses are not replaced by a project-wide license.
 

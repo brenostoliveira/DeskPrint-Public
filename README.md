@@ -7,16 +7,16 @@ maintained separately and are not included in this repository.
 ## Available source
 
 - [Creality Hi open components](sources/creality/hi/README.md): GPL printer and
-  Moonraker bridges, MIT filament inventory publisher, vendored qrcode source,
+  Moonraker bridges, MIT filament inventory publisher,
   license texts, build instructions and per-file SHA-256 inventory.
 - [Source index](SOURCE_INDEX.json): exact exported snapshot and provenance.
 - [License scope](LICENSES.md): licenses apply per component, not to the entire
   DeskPrint product.
 
 The initial source snapshot matches the open-component export of printer package
-`2026.11.02.3`. Its export README and hash manifest are preserved verbatim, including
-its historical statement that publication had not yet happened at export time.
-This repository is now the public publication of that snapshot.
+`2026.11.02.3`. The optional qrcode dependency is excluded at the owner's request. The source
+manifest describes the filtered files actually published; this is not the
+complete original export. Printer runtime changes are maintained separately.
 
 ## Updates
 
