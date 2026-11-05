@@ -15,7 +15,7 @@ Retain the notices and terms provided with each component.
 | `sources/creality/hi/source/web/studio_orca.py` | MIT |
 | `sources/creality/hi/build_open.py` | MIT |
 
-Full texts are in the source snapshot's `COPYING`, `MIT-LICENSE.txt`.
+Full texts are in the source snapshot's `COPYING`, `MIT-LICENSE.txt`. File notices and
 third-party exceptions remain applicable. Build information records dependencies;
 their individual licenses are not replaced by a project-wide license.
 
