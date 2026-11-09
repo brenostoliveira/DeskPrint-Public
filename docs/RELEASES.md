@@ -27,6 +27,31 @@ public keys and request installation through its normal maintenance flow.
 Do not ship publisher credentials or private signing keys to clients, or trust
 an arbitrary signing key obtained alongside a download.
 
+## Public channel and installation
+
+Desktop releases use `desktop-v<version>`. The `desktop-channel` release contains
+only a small `desktop-latest.json` pointer. That pointer selects a version; it
+does not authorize an executable. Clients verify that version's catalog and
+signature against the keys already included in the application, then verify the
+payload and its per-file inventory. Local maintenance packages remain supported.
+
+A version-specific small Web Setup downloads the audited full installer instead
+of embedding the application. Its expected installer size/hash and version URL
+are compiled into the bootstrap. Download pages/store uploads must use the current
+bootstrap; a version-specific bootstrap does not silently trust newer binaries.
+The language and destination chosen there are forwarded to the full installer.
+
+Updates replace application-owned binaries using the new inventory. Obsolete
+owned files are removed only after success is confirmed; rollback material is
+retained on failure. Unknown or modified files, personal data, settings and
+original printer backups are preserved. Releases retire only older recognized
+binary assets after the new channel is confirmed; required source, license
+notices and source history are retained.
+
+The transport/bootstrap implementation is prepared in the private build project.
+Remote binary publication remains pending exact-package distribution review;
+this document is not an announcement that those assets are already downloadable.
+
 The initial repository setup publishes open source only. It does not enable
 remote update discovery in the installed Desktop, upload existing installers,
 change signing keys or declare a commercial release.

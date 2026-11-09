@@ -22,6 +22,8 @@ except ImportError:
 MAX_WAIT = 7.
 MAX_MESSAGE = 16384
 DEFAULT_SOCKET = '/var/run/deskprinter-capture/control.sock'
+# Temporarily keep monitoring out of the printer's motion and SD paths.
+MONITORING_AVAILABLE = False
 
 
 class Capture:
@@ -55,15 +57,16 @@ class Capture:
         self.monitor_error='';self.layer_reader=None;self.layer_job=None;self.layer_prefix=None
         self.layer_number=0;self.layer_position=-1;self.monitor_attempted=0;self.monitor_busy=False;self.monitor_unsafe=False
         self.monitor_owner=''
-        try:
-            self.monitor_owner=json.loads((self.monitor_path.parent/'tlc_camera_bindings.json.identity.json').read_text())['printerId']
-            saved=json.loads(self.monitor_path.read_text())
-            if saved.get('printerId')==self.monitor_owner:self.monitoring=self.monitor_policy(saved)
-        except (OSError,ValueError,KeyError,TypeError):pass
-        self.gcode.register_command('TLC_MONITORING',self.configure_monitoring)
-        self.gcode.register_command('TLC_MONITORING_START',self.start_monitoring)
-        self.gcode.register_command('TLC_MONITORING_PARK',self.park_monitoring)
-        self.printer.register_event_handler('virtual_sdcard:reset_file',self.reset_layers)
+        if MONITORING_AVAILABLE:
+            try:
+                self.monitor_owner=json.loads((self.monitor_path.parent/'tlc_camera_bindings.json.identity.json').read_text())['printerId']
+                saved=json.loads(self.monitor_path.read_text())
+                if saved.get('printerId')==self.monitor_owner:self.monitoring=self.monitor_policy(saved)
+            except (OSError,ValueError,KeyError,TypeError):pass
+            self.gcode.register_command('TLC_MONITORING',self.configure_monitoring)
+            self.gcode.register_command('TLC_MONITORING_START',self.start_monitoring)
+            self.gcode.register_command('TLC_MONITORING_PARK',self.park_monitoring)
+            self.printer.register_event_handler('virtual_sdcard:reset_file',self.reset_layers)
         for name, method in (('TLC_CAPTURE_PREPARE',self.prepare),
                              ('TLC_CAPTURE_WAIT',self.capture),('TLC_CAPTURE_TEST',self.test),
                              ('TLC_TIMELAPSE',self.timelapse_mode)):
@@ -87,15 +90,16 @@ class Capture:
         if original is not None:
             self.native_original=original
             self.gcode.register_command('M5001',self.native_capture_command)
-        sd=self.printer.lookup_object('virtual_sdcard',None)
-        if sd is not None and callable(getattr(sd,'record_layer_info',None)):
-            self.layer_reader=sd.record_layer_info
-            def layer_reader(line,*args,**kwargs):
-                result=self.layer_reader(line,*args,**kwargs)
-                self.monitor_line(sd,line)
-                return result
-            sd.record_layer_info=layer_reader
-        self.install_setup_interception(sd)
+        if MONITORING_AVAILABLE:
+            sd=self.printer.lookup_object('virtual_sdcard',None)
+            if sd is not None and callable(getattr(sd,'record_layer_info',None)):
+                self.layer_reader=sd.record_layer_info
+                def layer_reader(line,*args,**kwargs):
+                    result=self.layer_reader(line,*args,**kwargs)
+                    self.monitor_line(sd,line)
+                    return result
+                sd.record_layer_info=layer_reader
+            self.install_setup_interception(sd)
         if self.status_worker is None:
             self.status_worker = threading.Thread(target=self.status_loop, daemon=True, name='capture-status')
             self.status_worker.start()
@@ -460,7 +464,7 @@ class Capture:
             value['monitoring']=dict(self.monitoring,printerId=self.monitor_owner,
                 supported=self.layer_reader is not None,layer=self.layer_number,
                 lastAttemptedLayer=self.monitor_attempted,busy=self.monitor_busy,error=self.monitor_error,
-                setupSupported=self.setup_supported,parkSupported=True,setup=self.setup_status())
+                setupSupported=self.setup_supported,parkSupported=MONITORING_AVAILABLE,setup=self.setup_status())
             return value
 
     def transport(self, operation, job, deadline, context=None):

@@ -41,10 +41,32 @@
         "-o",
         "module.pending.so"
       ],
+      "module": "aurora_manual_jog",
+      "sha256": "d4701c734f44b5523a4fbd47d0e6342330465266724eea00d835f3c28eaf04ab",
+      "source": "printer/creality/hi/aurora/aurora_manual_jog.py",
+      "sourceSha256": "8d039a48fd2121b0c64457247700c6119bb88d546e7e13b95da53b8b8953f599"
+    },
+    {
+      "flags": [
+        "cc",
+        "-target",
+        "arm-linux-gnueabihf.2.29",
+        "-mcpu=cortex_a7",
+        "-O2",
+        "-g0",
+        "-shared",
+        "-fPIC",
+        "-Wl,--strip-all",
+        "-I<SDK>/usr/include/python3.9",
+        "-I<SDK>/usr/include",
+        "unit.c",
+        "-o",
+        "module.pending.so"
+      ],
       "module": "aurora_filament_balance",
-      "sha256": "11bbc6e2a7273fe1ca805fd14cdc1db7225c3b103265dea82d7b3258779ab661",
+      "sha256": "aca5f9824247859bee9226cd4d8d09de1f4786e9e4a9e03d77498ccf4cea28d3",
       "source": "printer/creality/hi/klipper/aurora_filament_balance.py",
-      "sourceSha256": "b44c294d2d17c9398ccc1273411e373a877737bf49e7c05d5a99ee12449ba1d5"
+      "sourceSha256": "bea97481ff022316477a62a463551675126b63e648c78640bfd5cb5e2a17c063"
     },
     {
       "flags": [
@@ -130,9 +152,9 @@
         "module.pending.so"
       ],
       "module": "tlc_capture",
-      "sha256": "875b9bc6f055b9bd28f0dbfcb1f1af6875a94df79dee9135b81198803ca13252",
+      "sha256": "8a8b3cb15be8985008f7f64a27f5c19ebd739ffea8b4cbb8c4fff2554ced5796",
       "source": "printer/creality/hi/klipper/tlc_capture.py",
-      "sourceSha256": "e4d39f40734f89da0be48cda3e0a20e1a9ffa0285170d48bb5f59f4d73bfefeb"
+      "sourceSha256": "4666e283019df23c8637c440cc4bb40241c7f1e52a576f53ea91746adcc8d4ee"
     },
     {
       "flags": [
@@ -159,5 +181,5 @@
   ],
   "pythonAbi": "CPython3.9 hard-float",
   "target": "arm-linux-gnueabihf.2.29",
-  "version": "2026.11.02.3"
+  "version": "2026.11.08.2"
 }

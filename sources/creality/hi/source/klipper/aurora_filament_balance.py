@@ -15,6 +15,7 @@ from collections import deque
 from decimal import Decimal, InvalidOperation, localcontext
 
 PATH = '/mnt/UDISK/printer_data/config/aurora-filament-balance.json'
+MAX_SEGMENTS_PER_TICK = 16
 
 
 def grams(value):
@@ -236,8 +237,13 @@ class Balance:
             distance = (v+top)*.5*a + top*c + top*d - .5*acceleration*d*d
         return min(1., max(0., distance/segment['distance'])) if segment['distance'] else 0.
 
-    def advance(self, now):
+    def advance(self, now, max_segments=None):
+        processed=0
         while self.pending:
+            # Accounting is optional work on Klipper's reactor. A dense arc may
+            # leave thousands of finished segments here; yield via the timer,
+            # never via sleep, before accounting delays native step scheduling.
+            if max_segments is not None and processed>=max_segments:return False
             segment = self.pending[0]
             fraction = self.fraction(segment, now)
             delta = segment['e'] * (fraction-segment['applied'])
@@ -252,16 +258,18 @@ class Balance:
                 self.debt[slot] = self.debt.get(slot, 0.)-retract
                 if slot is None:self.unassigned_mm += delta-retract
                 else:self.ledger.consume(slot, delta-retract, segment['density'], segment['diameter'], segment['source'])
-            if fraction < 1.:
-                break
+            processed+=1
+            if fraction < 1.:return True
             self.pending.popleft()
+        return True
 
     def print_clock(self, now):
         return self.printer.lookup_object('mcu').estimated_print_time(now)
 
     def tick(self, now):
         try:
-            self.advance(self.print_clock(now))
+            if not self.advance(self.print_clock(now), max_segments=MAX_SEGMENTS_PER_TICK):
+                return self.reactor.monotonic() + .005
             stats = self.printing(now)
             # Finalize only on native terminal state, never handler return.
             if not self.active and stats.get('state') in ('complete', 'cancelled', 'error') and (stats['state']!='complete' or not self.pending):
@@ -295,4 +303,5 @@ class Balance:
             alerts=copy.deepcopy(self.ledger.data['alerts']), error=self.error,
             unassignedLengthMm=self.unassigned_mm,
             warning='Houve extrusão sem bobina identificada; confira os saldos.' if self.unassigned_mm else None,
-            method='completed-planner-extrusion', checkpointSeconds=5)
+            method='completed-planner-extrusion', checkpointSeconds=5,
+            backlogSegments=len(self.pending), maxSegmentsPerTick=MAX_SEGMENTS_PER_TICK)

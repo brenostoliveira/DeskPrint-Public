@@ -13,8 +13,8 @@ maintained separately and are not included in this repository.
 - [License scope](LICENSES.md): licenses apply per component, not to the entire
   DeskPrint product.
 
-The initial source snapshot matches the open-component export of printer package
-`2026.11.02.3`. The optional qrcode dependency is excluded at the owner's request. The source
+The source snapshot matches the open-component export of printer package
+`2026.11.08.2`. The optional qrcode dependency is excluded at the owner's request. The source
 manifest describes the filtered files actually published; this is not the
 complete original export. Printer runtime changes are maintained separately.
 
@@ -25,8 +25,9 @@ is the intended public location for approved update packages, signatures and
 matching source archives. No binary release is published by this initial setup.
 See [release requirements](docs/RELEASES.md).
 
-The currently installed Desktop still uses its configured local update channel.
-Creating this repository does not change client update settings automatically.
+The installed Desktop keeps its local channel until a release containing public
+channel support is installed. That transport and a small online installer are
+being prepared; no remotely installable binary is announced by this source update.
 
 ## Scope
 

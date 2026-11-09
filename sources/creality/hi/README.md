@@ -10,7 +10,7 @@ application, credential, customer configuration, photograph, backup or OEM firmw
 in this directory. Licensing follows each component's terms in COPYING and
 MIT-LICENSE.txt; see the repository's LICENSES.md.
 
-The included sources match their entries in the printer package 2026.11.02.3
+The included sources match their entries in the printer package 2026.11.08.2
 export. Build flags and source/binary hashes for the retained modules are in
 build-information.json. Use Cython3.1.6, Zig0.15.2 and compatible ARM hard-float
 CPython3.9 development headers. Installed firmware/interpreter dependencies are

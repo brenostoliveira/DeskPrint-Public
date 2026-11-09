@@ -1,11 +1,11 @@
 {
   "schema": 1,
   "component": "creality-hi-open-components",
-  "version": "2026.11.02.3",
+  "version": "2026.11.08.2",
   "sourceRoot": "sources/creality/hi",
-  "exportManifestSha256": "297aa024e44f0c220251ff588d3ca507462d3ee74208a2476df575de35cc5d87",
+  "exportManifestSha256": "30e3f558cdfde867d257acdbb99212c7b492fe862bdc9a23cfcf58d314303573",
   "publicFiles": 13,
   "binaryReleasesPublished": false,
-  "originalArchiveSha256": "16edff6b02fe7d19311e98fbbf36ac1090a0b3517c48135883ebc766098f9183",
+  "originalArchiveSha256": "51d34ed2ec22bb8af40737a7a9274bb81e8fbc17c2ef3c6fe2fd1226144df877",
   "selection": "without-qrcode"
 }

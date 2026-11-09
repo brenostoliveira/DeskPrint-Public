@@ -12,6 +12,7 @@ Retain the notices and terms provided with each component.
 | `sources/creality/hi/source/klipper/aurora_homing_guard.py` | GPL-3.0-or-later |
 | `sources/creality/hi/source/klipper/aurora_filament_balance.py` | GPL-3.0-or-later |
 | `sources/creality/hi/source/aurora/aurora_identity.py` | GPL-3.0-or-later |
+| `sources/creality/hi/source/aurora/aurora_manual_jog.py` | GPL-3.0-or-later |
 | `sources/creality/hi/source/web/studio_orca.py` | MIT |
 | `sources/creality/hi/build_open.py` | MIT |
 

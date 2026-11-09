@@ -1,18 +1,18 @@
 {
+  "version": "2026.11.08.2",
   "files": {
-    "build-information.json": "4d5b8909e22b197dd59bc20435eb3fbced6a5a3887639b68ff67d9344767a6e5",
-    "build_open.py": "bb512fbb855ae68b0ccd311a972d883c2acbb1626bd0f96499aa0de46eaaea3f",
     "COPYING": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
     "MIT-LICENSE.txt": "82084cac9c7177873a313cd4fe189217c0110903c87769b0bb558880e4bca829",
-    "README.md": "da7454287f2eabb774ec12aaa0647e1812c9b3f6956bb19fe668da9439b947c5",
+    "README.md": "cddfe2375267f6890b3acfb25d8fbe14998802e597cb6abf17d1b642913dd715",
+    "build-information.json": "76300d9ed74c5934330b6c49bfb9292d1a78915e27c40a0d4ae8419735161117",
+    "build_open.py": "bb512fbb855ae68b0ccd311a972d883c2acbb1626bd0f96499aa0de46eaaea3f",
     "source/aurora/aurora_identity.py": "1f522c29525db5bc057fde987f3bce4e985eafac551e02ca2e04bf827aa50cfa",
-    "source/klipper/aurora_filament_balance.py": "b44c294d2d17c9398ccc1273411e373a877737bf49e7c05d5a99ee12449ba1d5",
+    "source/aurora/aurora_manual_jog.py": "8d039a48fd2121b0c64457247700c6119bb88d546e7e13b95da53b8b8953f599",
+    "source/klipper/aurora_filament_balance.py": "bea97481ff022316477a62a463551675126b63e648c78640bfd5cb5e2a17c063",
     "source/klipper/aurora_homing_guard.py": "648e2eb527f72e5fb9fd40801a0e529c16ab162e3570e52feda51da2144fb3ce",
     "source/klipper/aurora_phase_observer.py": "f67c0d0c03f77ae74585c90f3600ad2c1636b48858a0afd33fa7a23e42f5830d",
     "source/klipper/logo_sound_clock.py": "1e1ed200b7dc59666bc7cd7af1f1fca5ff0987180969b286ae28c24e157ac227",
-    "source/klipper/tlc_capture.py": "e4d39f40734f89da0be48cda3e0a20e1a9ffa0285170d48bb5f59f4d73bfefeb",
+    "source/klipper/tlc_capture.py": "4666e283019df23c8637c440cc4bb40241c7f1e52a576f53ea91746adcc8d4ee",
     "source/web/studio_orca.py": "a1b02ed17c3072bd0d22b69e6ddbbabb9fc2b356c6ffb2fdf00bba50aac44456"
-  },
-  "version": "2026.11.02.3",
-  "selection": "without-qrcode"
+  }
 }
