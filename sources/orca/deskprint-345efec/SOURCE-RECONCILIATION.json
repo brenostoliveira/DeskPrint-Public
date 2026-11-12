@@ -1,0 +1,62 @@
+{
+  "schema": 1,
+  "baseRevision": "345efec64c7b95a05ce5cf96df0dde66a158835c",
+  "compiledSourceRevision": "6fa95284f91c07666f3470a358c0b65c5d336cf2",
+  "dllSha256": "5cd18b6ece79239490233c7ac51997c1a98384b7b505e4a6eff4b27822ae8451",
+  "sourceArchiveSha256": "81f4237809445fa30a024b95efe2bd771e277b9c1cc9de3329187f9adc78878d",
+  "patchSha256": "e187b51632714fbc58c5cabefb9b33634eeeef378cdc1270e0f8a3640b78efec",
+  "compiledSourceMatchedArchive": true,
+  "binaryChanged": false,
+  "files": [
+    {
+      "path": "src/libslic3r/GCode.cpp",
+      "beforeSha256": "fdd64e3afeba88ee1c2570629582d3b4d3c52baa544b4c5cbd1a947689a305e6",
+      "afterSha256": "e56d794892fc9a8b3365b4fd41a4c709e4fc92e6f54b1904991170dd34a6c2ff",
+      "change": "leading notice comment only"
+    },
+    {
+      "path": "src/libslic3r/GCode.hpp",
+      "beforeSha256": "e6780c671e9de5b90ef011e9e55dc0f5b18356c0e841e7a807d88bf903d5c7b1",
+      "afterSha256": "af86c92cde8fd8e59ebb7fe6d287e05ea49230e2d55b2eddb8140ebe969d57be",
+      "change": "leading notice comment only"
+    },
+    {
+      "path": "src/slic3r/GUI/MainFrame.cpp",
+      "beforeSha256": "690810470d06cceb5ace356667c765be5997ac6e91a1a763e25f98056b05b9df",
+      "afterSha256": "690810470d06cceb5ace356667c765be5997ac6e91a1a763e25f98056b05b9df",
+      "change": "existing notice preserved"
+    },
+    {
+      "path": "src/slic3r/Utils/MoonrakerPrinterAgent.cpp",
+      "beforeSha256": "c618848176af3a7b1afa749f37aac0ebceee4771c9100489a6462db33c043842",
+      "afterSha256": "c618848176af3a7b1afa749f37aac0ebceee4771c9100489a6462db33c043842",
+      "change": "existing notice preserved"
+    },
+    {
+      "path": "src/slic3r/Utils/MoonrakerToolMapping.hpp",
+      "beforeSha256": "917852d493ac6dec64cb9782034d9564471e1321c6e4d572a4434a35da2fd2b2",
+      "afterSha256": "917852d493ac6dec64cb9782034d9564471e1321c6e4d572a4434a35da2fd2b2",
+      "change": "existing notice preserved"
+    },
+    {
+      "path": "tests/fff_print/CMakeLists.txt",
+      "beforeSha256": "d692680de75fcf2fe5dae449855a0cd2428d9fbf1d17018c00c59cc2009dbb8c",
+      "afterSha256": "fcdfaa594a4612d06456e6888661b172cb2add6357f7919af8d915319f6fbc42",
+      "change": "leading notice comment only"
+    },
+    {
+      "path": "tests/fff_print/test_creality_hi_cfs.cpp",
+      "beforeSha256": "b195f68f0abd2a236056658becd95c301993a0e4c954b280e06d00a4c89cf4af",
+      "afterSha256": "b195f68f0abd2a236056658becd95c301993a0e4c954b280e06d00a4c89cf4af",
+      "change": "existing notice preserved"
+    },
+    {
+      "path": "src/slic3r/Utils/MoonrakerPrinterAgent.hpp",
+      "beforeSha256": "02008677ff96f188e5da40a6b992c78dc98fe3d526df2744992a1fdff6509281",
+      "afterSha256": "3aa11da24f7911338a8d89a126ea7e1bf40e5b8ae25d770e1ff659e53a57b2ed",
+      "change": "leading notice comment only"
+    }
+  ],
+  "validation": "Source comparison only. Existing runtime/physical acceptance limits preserved.",
+  "commercialClearance": "pending"
+}

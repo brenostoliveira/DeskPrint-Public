@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "baseRevision": "345efec64c7b95a05ce5cf96df0dde66a158835c",
+  "license": "AGPL-3.0",
+  "sourceArchiveSha256": "81f4237809445fa30a024b95efe2bd771e277b9c1cc9de3329187f9adc78878d",
+  "files": [
+    {
+      "path": "0001-device-web-with-printer-agents.patch",
+      "bytes": 42993,
+      "sha256": "e187b51632714fbc58c5cabefb9b33634eeeef378cdc1270e0f8a3640b78efec"
+    },
+    {
+      "path": "LICENSE-OrcaSlicer.txt",
+      "bytes": 35181,
+      "sha256": "282751b8c98ee9e445346eb57a992c9ecbe25ed8dd554df046777313e19b10f9"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2064,
+      "sha256": "4762ec0f86b4dbd81528563aea2d6ac0b32a8abea3bccbe7cd003e9820059494"
+    },
+    {
+      "path": "SOURCE-RECONCILIATION.json",
+      "bytes": 2939,
+      "sha256": "8aba49c556457d8577339c93479f1194ae7de25b774c60e07cb2e1adbf67ac90"
+    },
+    {
+      "path": "src/libslic3r/GCode.cpp",
+      "bytes": 678245,
+      "sha256": "e56d794892fc9a8b3365b4fd41a4c709e4fc92e6f54b1904991170dd34a6c2ff"
+    },
+    {
+      "path": "src/libslic3r/GCode.hpp",
+      "bytes": 57776,
+      "sha256": "af86c92cde8fd8e59ebb7fe6d287e05ea49230e2d55b2eddb8140ebe969d57be"
+    },
+    {
+      "path": "src/slic3r/GUI/MainFrame.cpp",
+      "bytes": 205283,
+      "sha256": "690810470d06cceb5ace356667c765be5997ac6e91a1a763e25f98056b05b9df"
+    },
+    {
+      "path": "src/slic3r/Utils/MoonrakerPrinterAgent.cpp",
+      "bytes": 103349,
+      "sha256": "c618848176af3a7b1afa749f37aac0ebceee4771c9100489a6462db33c043842"
+    },
+    {
+      "path": "src/slic3r/Utils/MoonrakerPrinterAgent.hpp",
+      "bytes": 13147,
+      "sha256": "3aa11da24f7911338a8d89a126ea7e1bf40e5b8ae25d770e1ff659e53a57b2ed"
+    },
+    {
+      "path": "src/slic3r/Utils/MoonrakerToolMapping.hpp",
+      "bytes": 5513,
+      "sha256": "917852d493ac6dec64cb9782034d9564471e1321c6e4d572a4434a35da2fd2b2"
+    },
+    {
+      "path": "SUPPLEMENTAL-BUILD.md",
+      "bytes": 1813,
+      "sha256": "d7fd171923106ca7293bdb13d3f0486296a48b49934e768fddcdfa21ab9188b3"
+    },
+    {
+      "path": "tests/fff_print/CMakeLists.txt",
+      "bytes": 1579,
+      "sha256": "fcdfaa594a4612d06456e6888661b172cb2add6357f7919af8d915319f6fbc42"
+    },
+    {
+      "path": "tests/fff_print/test_creality_hi_cfs.cpp",
+      "bytes": 8615,
+      "sha256": "b195f68f0abd2a236056658becd95c301993a0e4c954b280e06d00a4c89cf4af"
+    }
+  ]
+}

@@ -1,0 +1,785 @@
+diff --git a/src/libslic3r/GCode.cpp b/src/libslic3r/GCode.cpp
+--- a/src/libslic3r/GCode.cpp
++++ b/src/libslic3r/GCode.cpp
+@@ -1,3 +1,4 @@
++// Modified by DeskPrint Studio; source notice added 2026-11-11.
+ #include "ArcFitter.hpp"
+ #include <tuple>
+ #include "BoundingBox.hpp"
+@@ -1652,6 +1653,24 @@
+         return gcode;
+     }
+ 
++    // Modified by DeskPrint Studio, 2026-11-02: recognize the native Hi station
++    // route, ignoring formatting/comments, rather than rewriting arbitrary user G-code.
++    static bool is_native_hi_toolchange(const std::string &gcode)
++    {
++        std::string commands;
++        bool comment = false;
++        for (unsigned char c : gcode) {
++            if (c == '\n' || c == '\r')
++                comment = false;
++            else if (c == ';')
++                comment = true;
++            else if (!comment && !std::isspace(c))
++                commands += char(c);
++        }
++        return commands == "G2Z{z_after_toolchange+0.4}I0.86J0.86P1F10000"
++                           "G1X260Y180F30000G1Z{z_after_toolchange}F600";
++    }
++
+     std::string WipeTowerIntegration::append_tcr2(GCode                             &gcodegen,
+                                                   const WipeTower::ToolChangeResult &tcr,
+                                                   int                                new_extruder_id,
+@@ -1694,6 +1713,25 @@
+             z = current_z;
+ 
+         const bool needs_toolchange = gcodegen.writer().need_toolchange(new_extruder_id);
++        // Modified by DeskPrint Studio, 2026-11-02. The compacted tower can be
++        // below the object: preserve its unloading Z, but use the highest object
++        // layer for both crossings to/from the native CFS station.
++        std::optional<double> cfs_travel_z;
++        const auto &printer_config = gcodegen.m_print->config();
++        if (needs_toolchange && new_extruder_id >= 0 &&
++            printer_config.printer_model.value == "Creality Hi" &&
++            printer_config.gcode_flavor == gcfKlipper &&
++            printer_config.single_extruder_multi_material &&
++            printer_config.nozzle_diameter.values.size() == 1) {
++            if (!is_native_hi_toolchange(gcodegen.config().change_filament_gcode.value) ||
++                printer_config.manual_filament_change.value)
++                throw Slic3r::RuntimeError(_(L("Safe Creality Hi CFS travel requires the native filament-change G-code and automatic filament changes.")));
++            const double floor_z = std::max({current_z, tcr.print_z + gcodegen.config().z_offset.value,
++                                             double(gcodegen.m_max_layer_z) + gcodegen.config().z_offset.value});
++            if (!std::isfinite(floor_z) || floor_z < 0. || floor_z + 0.4 > printer_config.printable_height.value)
++                throw Slic3r::RuntimeError(_(L("Not enough Z clearance for safe Creality Hi CFS travel. Reduce the print height before exporting.")));
++            cfs_travel_z = floor_z;
++        }
+         const bool will_go_down     = !is_approx(z, current_z);
+         const bool is_ramming       = (gcodegen.config().single_extruder_multi_material) ||
+                                 (!gcodegen.config().single_extruder_multi_material &&
+@@ -1758,7 +1796,7 @@
+                 toolchange_temp_override = interface_temp;
+             }
+             toolchange_gcode_str = gcodegen.set_extruder(new_extruder_id, tcr.print_z, false, toolchange_temp_override,
+-                                                         WipeTower2::wait_for_temp_enabled(gcodegen.m_config)); // TODO: toolchange_z vs print_z
++                                                         WipeTower2::wait_for_temp_enabled(gcodegen.m_config), cfs_travel_z); // TODO: toolchange_z vs print_z
+             if (!travel_to_tower_now && !tcr.priming && WipeTower2::use_gap_wall(gcodegen.m_config)) {
+                 // The tool changed in place (multi-tool printer without ramming), so the
+                 // tower entry is the tcr's own positioning move — a straight line across
+@@ -10840,7 +10878,8 @@
+     }
+ }
+ 
+-std::string GCode::set_extruder(unsigned int new_filament_id, double print_z, bool by_object, int toolchange_temp_override, bool defer_temp_wait)
++std::string GCode::set_extruder(unsigned int new_filament_id, double print_z, bool by_object, int toolchange_temp_override, bool defer_temp_wait,
++                               std::optional<double> cfs_travel_z)
+ {
+     int new_extruder_id = get_extruder_id(new_filament_id);
+     if (!m_writer.need_toolchange(new_filament_id))
+@@ -11112,7 +11151,7 @@
+     dyn_config.set_key_value("new_filament_temp", new ConfigOptionInt(new_filament_temp));
+     dyn_config.set_key_value("x_after_toolchange", new ConfigOptionFloat(nozzle_pos(0)));
+     dyn_config.set_key_value("y_after_toolchange", new ConfigOptionFloat(nozzle_pos(1)));
+-    dyn_config.set_key_value("z_after_toolchange", new ConfigOptionFloat(nozzle_pos(2)));
++    dyn_config.set_key_value("z_after_toolchange", new ConfigOptionFloat(cfs_travel_z.value_or(nozzle_pos(2))));
+     dyn_config.set_key_value("first_flush_volume", new ConfigOptionFloat(wipe_length / 2.f));
+     dyn_config.set_key_value("second_flush_volume", new ConfigOptionFloat(wipe_length / 2.f));
+     dyn_config.set_key_value("old_filament_e_feedrate", new ConfigOptionInt(old_filament_e_feedrate));
+@@ -11198,7 +11237,13 @@
+     std::string change_filament_gcode = m_config.change_filament_gcode.value;
+ 
+     // Move the lift gcode here which is in the change_filament_gcode originally
+-    change_filament_gcode = this->retract(false, false, LiftType::SpiralLift, true) + change_filament_gcode;
++    std::string toolchange_lift = this->retract(false, false, LiftType::SpiralLift, true);
++    // Modified by DeskPrint Studio, 2026-11-02: lift vertically while still at
++    // the tower, after the original retraction and before any station-bound XY.
++    // travel_to_z(force) clears writer lift accounting; no E/mode/T is injected.
++    if (cfs_travel_z && m_writer.get_position().z() < *cfs_travel_z)
++        toolchange_lift += m_writer.travel_to_z(*cfs_travel_z, "DeskPrint CFS outbound clearance", true);
++    change_filament_gcode = toolchange_lift + change_filament_gcode;
+ 
+     std::string toolchange_gcode_parsed;
+     //Orca: Ignore change_filament_gcode if is the first call for a tool change and manual_filament_change is enabled
+@@ -11319,6 +11364,11 @@
+     // See the note on the single-extruder path above: -1 outside IMEX parallel modes.
+     gcode += set_filament_pressure_advance(new_filament_id,
+         imex_pem_tool_for((int) new_filament_id, m_imex_parallel_mode, m_config.physical_extruder_map));
++    // Modified by DeskPrint Studio, 2026-11-02: native Tn can reposition the
++    // head. Reassert return clearance before the tower generator's XY moves;
++    // its deretraction placeholder restores the low tower Z only after arrival.
++    if (cfs_travel_z)
++        gcode += m_writer.travel_to_z(*cfs_travel_z + 0.4, "DeskPrint CFS return clearance", true);
+     //Orca: tool changer or IDEX's firmware may change Z position, so we set it to unknown/undefined
+     m_last_pos_defined = false;
+     if (position_before_toolchange)
+diff --git a/src/libslic3r/GCode.hpp b/src/libslic3r/GCode.hpp
+--- a/src/libslic3r/GCode.hpp
++++ b/src/libslic3r/GCode.hpp
+@@ -1,3 +1,4 @@
++// Modified by DeskPrint Studio; source notice added 2026-11-11.
+ #ifndef slic3r_GCode_hpp_
+ #define slic3r_GCode_hpp_
+ 
+@@ -309,7 +310,9 @@
+     std::string     retract(bool toolchange = false, bool is_last_retraction = false, LiftType lift_type = LiftType::NormalLift, bool apply_instantly = false, ExtrusionRole role = erNone);
+     // extra_retract forwards a PETG pre-extrusion over-extrusion; default 0 -> identical to the plain deretract.
+     std::string     unretract(float extra_retract = 0.f) { return m_writer.unlift() + m_writer.unretract(extra_retract); }
+-    std::string     set_extruder(unsigned int extruder_id, double print_z, bool by_object=false, int toolchange_temp_override = -1, bool defer_temp_wait = false);
++    // Modified by DeskPrint Studio, 2026-11-02: optional native Hi/CFS tower travel floor.
++    std::string     set_extruder(unsigned int extruder_id, double print_z, bool by_object=false, int toolchange_temp_override = -1, bool defer_temp_wait = false,
++                                std::optional<double> cfs_travel_z = std::nullopt);
+     // Sets the pressure advance of the filament's extruder variant, if enabled for it.
+     // tool addresses one IMEX carriage explicitly. -1 means no carriage: it omits the tool
+     // qualifier on Klipper, Marlin and BBL, and keeps RepRapFirmware's historical `D0`, since a
+diff --git a/src/slic3r/GUI/MainFrame.cpp b/src/slic3r/GUI/MainFrame.cpp
+--- a/src/slic3r/GUI/MainFrame.cpp
++++ b/src/slic3r/GUI/MainFrame.cpp
+@@ -1,3 +1,4 @@
++// Modified by DeskPrinter Studio on 2026-10-27: optional Studio Device page with printer agents.
+ #include "MainFrame.hpp"
+ 
+ #include <wx/event.h>
+@@ -1616,11 +1617,18 @@
+     auto idx = -1;
+ 
+     const bool use_printer_agents = wxGetApp().app_config->get_bool("use_printer_agents");
++    // Device-page presentation is independent of transport and filament synchronization.
++    // Keep Bambu's native controls and unconfigured printers on their existing paths.
++    const bool prefer_web_device = use_printer_agents &&
++        wxGetApp().app_config->get_bool("prefer_web_device_tab") &&
++        wxGetApp().preset_bundle != nullptr &&
++        !wxGetApp().preset_bundle->use_bbl_device_tab() &&
++        !wxGetApp().preset_bundle->printers.get_edited_preset().config.opt_string("print_host_webui").empty();
+ 
+     // The web Device page is the extra tab printer-agents mode shows alongside the native one.
+     // Printers that drive the native Bambu device tab have nothing to put in it, so they don't
+     // get it — otherwise a Bambu user sees two Device tabs, one of them permanently empty.
+-    const bool want_web_device_tab = use_printer_agents && wxGetApp().preset_bundle != nullptr &&
++    const bool want_web_device_tab = use_printer_agents && !prefer_web_device && wxGetApp().preset_bundle != nullptr &&
+                                      !wxGetApp().preset_bundle->use_bbl_device_tab();
+ 
+     // Remove the extra page before switching to any layout that shouldn't have it.
+@@ -1632,7 +1640,17 @@
+     }
+ 
+     if (use_printer_agents) {
+-        if (!m_monitor_page->in_book()) {
++        if (prefer_web_device) {
++            if ((idx = m_tabpanel->FindPage(m_monitor_page)) != wxNOT_FOUND) {
++                m_monitor_page->Show(false);
++                m_tabpanel->RemovePage(idx);
++            }
++            if (!m_printer_view_page->in_book()) {
++                m_printer_view_page->Show(false);
++                m_tabpanel->InsertPage(m_tabpanel->PositionAfter({TAB_ID_PREVIEW}), TAB_ID_MONITOR,
++                                       m_printer_view_page, _L("Device"), "tab_monitor_active");
++            }
++        } else if (!m_monitor_page->in_book()) {
+             if ((idx = m_tabpanel->FindPage(m_printer_view_page)) != wxNOT_FOUND) {
+                 m_printer_view_page->Show(false);
+                 m_tabpanel->RemovePage(idx);
+diff --git a/src/slic3r/Utils/MoonrakerPrinterAgent.cpp b/src/slic3r/Utils/MoonrakerPrinterAgent.cpp
+--- a/src/slic3r/Utils/MoonrakerPrinterAgent.cpp
++++ b/src/slic3r/Utils/MoonrakerPrinterAgent.cpp
+@@ -1,4 +1,6 @@
++// Modified by DeskPrinter Studio on 2026-10-31: Aurora palettes, timelapse and per-job CFS mapping.
+ #include "MoonrakerPrinterAgent.hpp"
++#include "MoonrakerToolMapping.hpp"
+ #include "AsioUtils.hpp"
+ #include "Http.hpp"
+ #include "IPrinterAgent.hpp"
+@@ -7,6 +9,8 @@
+ #include "libslic3r/Preset.hpp"
+ #include "libslic3r/PresetBundle.hpp"
+ #include "libslic3r/Utils.hpp"
++#include "libslic3r/miniz_extension.hpp"
++#include <boost/nowide/fstream.hpp>
+ #include "slic3r/GUI/GUI_App.hpp"
+ #include "slic3r/GUI/I18N.hpp"
+ #include "slic3r/GUI/DeviceManager.hpp"
+@@ -328,6 +332,157 @@
+     return BAMBU_NETWORK_SUCCESS;
+ }
+ 
++namespace {
++// Moonraker consumes plain G-code, never the 3MF container used by Bambu jobs.
++// Own only a randomly created temporary directory; never extract archive paths.
++struct MoonrakerGcodeUpload {
++    boost::filesystem::path path, temporary_dir;
++    boost::filesystem::path original_filename;
++    bool valid = false;
++    std::string error;
++    void configure_timelapse(bool enabled) {
++        namespace fs = boost::filesystem;
++        if (temporary_dir.empty()) {
++            temporary_dir = fs::temp_directory_path() / fs::unique_path("deskprinter-gcode-%%%%-%%%%-%%%%");
++            if (!fs::create_directory(temporary_dir)) { valid = false; return; }
++        }
++        const fs::path target = temporary_dir / "prepared.gcode";
++        boost::nowide::ifstream source(path.string(), std::ios::binary);
++        boost::nowide::ofstream output(target.string(), std::ios::binary | std::ios::trunc);
++        if (!source || !output) { valid = false; return; }
++        output << "TLC_TIMELAPSE ENABLE=" << (enabled ? 1 : 0) << "\n";
++        std::vector<std::string> block;
++        size_t native_blocks = 0;
++        bool intentionally_unsupported = false;
++        auto clean = [](std::string line) {
++            const auto comment = line.find(';');
++            if (comment != std::string::npos) line.resize(comment);
++            boost::trim(line);return line;
++        };
++        auto native_block = [&]() {
++            std::vector<std::string> commands;
++            for (const auto& line : block) { auto cmd=clean(line);if (!cmd.empty())commands.push_back(cmd); }
++            return commands.size()==7 && commands[0]=="M5001 G92 E0" && commands[1]=="M5001 G17" &&
++                commands[2].rfind("M5001 G2 Z",0)==0 && commands[2].find(" I0.86 J0.86 P1 F20000")!=std::string::npos &&
++                commands[3]=="M5001 G1 X0 Y180 F24000" && commands[4]=="M5001 P15" &&
++                commands[5]=="M5001 M400 P300" && commands[6]=="M5001 G92 E0";
++        };
++        std::string line;
++        while (std::getline(source,line)) {
++            if (line.size()>1024*1024) { valid=false;return; }
++            std::string trimmed=line;boost::trim(trimmed);
++            if (trimmed=="; spiral_mode = 1" || trimmed=="; print_sequence = by object")intentionally_unsupported=true;
++            if (trimmed=="TLC_TIMELAPSE ENABLE=0" || trimmed=="TLC_TIMELAPSE ENABLE=1")continue;
++            if (!block.empty()) {
++                block.push_back(line);
++                if (block.size()>64) { valid=false;return; }
++                if (trimmed==";time lapse end") {
++                    // Only this exact, supplied stock block may be omitted.
++                    // Other custom G-code is preserved, never broadly filtered.
++                    const bool stock = native_block();
++                    if (stock) ++native_blocks;
++                    if (enabled || !stock)for (const auto& saved : block)output << saved << '\n';
++                    else output << "G92 E0\nG17\nG92 E0\n";
++                    block.clear();
++                }
++            } else if (trimmed==";time lapse begin")block.push_back(line);
++            else output << line << '\n';
++        }
++        if (!block.empty())for (const auto& saved : block)output << saved << '\n';
++        output.flush();valid=source.eof() && output.good();
++        if (enabled && native_blocks == 0 && !intentionally_unsupported) {
++            error="DeskPrinter timelapse: re-slice after integrating the Creality layer template. No capture block was generated in this file.";
++            BOOST_LOG_TRIVIAL(error) << error;
++            valid = false;
++        }
++        if (valid)path=target;
++    }
++    void configure_filaments(const PrintParams& params) {
++        MoonrakerToolMapping mapping(params.ams_mapping,params.ams_mapping2);
++        boost::nowide::ifstream scan(path.string(),std::ios::binary);
++        std::string line;
++        while (std::getline(scan,line)) {
++            if (line.size()>1024*1024)throw std::runtime_error("DeskPrinter: print line exceeds the preparation limit.");
++            mapping.inspect(line);
++        }
++        if (!scan.eof() || !mapping.has_tools())throw std::runtime_error("DeskPrinter: no validated tool selection in the print file.");
++        if (temporary_dir.empty()) {
++            temporary_dir=boost::filesystem::temp_directory_path()/boost::filesystem::unique_path("deskprinter-gcode-%%%%-%%%%-%%%%");
++            if (!boost::filesystem::create_directory(temporary_dir))throw std::runtime_error("DeskPrinter: cannot prepare the mapped print file.");
++        }
++        const auto target=temporary_dir/"mapped.gcode";
++        boost::nowide::ifstream input(path.string(),std::ios::binary);
++        boost::nowide::ofstream output(target.string(),std::ios::binary|std::ios::trunc);
++        if (!input || !output)throw std::runtime_error("DeskPrinter: cannot prepare the mapped print file.");
++        while (std::getline(input,line))output << mapping.rewrite(line) << '\n';
++        output.flush();
++        if (!input.eof() || !output.good())throw std::runtime_error("DeskPrinter: incomplete mapped print file.");
++        path=target;
++    }
++    explicit MoonrakerGcodeUpload(const PrintParams& params, bool studio_timelapse, bool studio_cfs) {
++        namespace fs = boost::filesystem;
++        try {
++            path = params.dst_file.empty() ? params.filename : params.dst_file;
++            original_filename=path.filename();
++            if (!fs::is_regular_file(path)) return;
++            char magic[4] = {};
++            boost::nowide::ifstream input(path.string(), std::ios::binary);
++            input.read(magic, sizeof(magic));
++            const bool zipped = magic[0] == 'P' && magic[1] == 'K';
++            if (!zipped) {
++                // A declared 3MF must not silently be renamed and printed.
++                valid = !boost::iends_with(path.string(), ".3mf");
++                if (valid && studio_timelapse)configure_timelapse(params.task_record_timelapse);
++                if (valid && studio_cfs && params.task_use_ams)configure_filaments(params);
++                return;
++            }
++            mz_zip_archive zip = {};
++            if (!open_zip_reader(&zip, path.string())) return;
++            struct Close { mz_zip_archive* zip; ~Close() { close_zip_reader(zip); } } close{&zip};
++            int selected = -1, count = 0;
++            const std::string requested = "Metadata/plate_" + std::to_string(params.plate_index) + ".gcode";
++            for (mz_uint i = 0; i < mz_zip_reader_get_num_files(&zip); ++i) {
++                mz_zip_archive_file_stat entry;
++                if (!mz_zip_reader_file_stat(&zip, i, &entry)) return;
++                const std::string name = entry.m_filename;
++                if (name == requested) { selected = static_cast<int>(i); break; }
++                if (params.plate_index <= 0 && boost::starts_with(name, "Metadata/plate_") && boost::ends_with(name, ".gcode")) {
++                    selected = static_cast<int>(i); ++count;
++                }
++            }
++            if (selected < 0 || (params.plate_index <= 0 && count != 1)) return;
++            mz_zip_archive_file_stat entry;
++            if (!mz_zip_reader_file_stat(&zip, selected, &entry) || entry.m_is_directory ||
++                entry.m_uncomp_size == 0 || entry.m_uncomp_size > 1024ULL*1024*1024) return;
++            temporary_dir = fs::temp_directory_path() / fs::unique_path("deskprinter-gcode-%%%%-%%%%-%%%%");
++            if (!fs::create_directory(temporary_dir)) return;
++            path = temporary_dir / "plate.gcode";
++            original_filename=path.filename();
++            if (!extract_zip_entry_to_file(&zip, selected, path)) return; // Includes archive CRC verification.
++            boost::nowide::ifstream extracted(path.string(), std::ios::binary);
++            char header[4] = {}; extracted.read(header, sizeof(header));
++            valid = extracted.gcount() > 0 && !(header[0] == 'P' && header[1] == 'K');
++            extracted.close();
++            if (valid && studio_timelapse)configure_timelapse(params.task_record_timelapse);
++            if (valid && studio_cfs && params.task_use_ams)configure_filaments(params);
++        } catch (const std::exception& failure) {
++            valid=false;error=failure.what();
++            BOOST_LOG_TRIVIAL(error) << "Moonraker G-code preparation failed: " << error;
++        }
++    }
++    MoonrakerGcodeUpload(const MoonrakerGcodeUpload&) = delete;
++    ~MoonrakerGcodeUpload() {
++        if (!temporary_dir.empty()) {
++            boost::system::error_code ignored;
++            boost::filesystem::remove(temporary_dir / "plate.gcode", ignored);
++            boost::filesystem::remove(temporary_dir / "prepared.gcode", ignored);
++            boost::filesystem::remove(temporary_dir / "mapped.gcode", ignored);
++            boost::filesystem::remove(temporary_dir, ignored);
++        }
++    }
++};
++}
++
+ int MoonrakerPrinterAgent::start_send_gcode_to_sdcard(PrintParams      params,
+                                                       OnUpdateStatusFn update_fn,
+                                                       WasCancelledFn   cancel_fn,
+@@ -338,7 +493,16 @@
+     if (update_fn)
+         update_fn(PrintingStageCreate, 0, _u8L("Preparing..."));
+ 
+-    std::string filename = params.filename;
++    bool studio_timelapse=false, studio_cfs=false;
++    { std::lock_guard<std::recursive_mutex> lock(payload_mutex);
++      studio_timelapse=status_cache.contains("tlc_capture") && status_cache["tlc_capture"].value("nativeInterception",false);
++      studio_cfs=available_objects.count("box")!=0 && available_objects.count("aurora_phase_observer")!=0; }
++    MoonrakerGcodeUpload prepared(params,studio_timelapse,studio_cfs);
++    if (!prepared.valid) {
++        if (update_fn && !prepared.error.empty())update_fn(PrintingStageCreate,0,prepared.error);
++        return BAMBU_NETWORK_ERR_FILE_NOT_EXIST;
++    }
++    std::string filename = params.task_name.empty() ? prepared.original_filename.string() : params.task_name;
+     if (filename.empty()) {
+         filename = params.task_name;
+     }
+@@ -350,7 +514,7 @@
+     std::string safe_filename = sanitize_filename(filename);
+ 
+     // Upload only, don't start print
+-    if (!upload_gcode(params.filename, safe_filename, device_info.base_url, device_info.api_key, update_fn, cancel_fn)) {
++    if (!upload_gcode(prepared.path.string(), safe_filename, device_info.base_url, device_info.api_key, update_fn, cancel_fn)) {
+         return BAMBU_NETWORK_ERR_PRINT_SG_UPLOAD_FTP_FAILED;
+     }
+ 
+@@ -368,20 +532,17 @@
+     if (cancel_fn && cancel_fn()) {
+         return BAMBU_NETWORK_ERR_CANCELED;
+     }
+-    // Determine the G-code file to upload
+-    // params.filename may be .3mf, params.dst_file contains actual G-code
+-    std::string gcode_path = params.filename;
+-    if (!params.dst_file.empty()) {
+-        gcode_path = params.dst_file;
+-    }
+-
+-    // Check if file exists and has .gcode extension
+-    namespace fs = boost::filesystem;
+-    fs::path source_path(gcode_path);
+-    if (!fs::exists(source_path)) {
+-        BOOST_LOG_TRIVIAL(error) << "MoonrakerPrinterAgent: G-code file does not exist: " << gcode_path;
++    bool studio_timelapse=false, studio_cfs=false;
++    { std::lock_guard<std::recursive_mutex> lock(payload_mutex);
++      studio_timelapse=status_cache.contains("tlc_capture") && status_cache["tlc_capture"].value("nativeInterception",false);
++      studio_cfs=available_objects.count("box")!=0 && available_objects.count("aurora_phase_observer")!=0; }
++    MoonrakerGcodeUpload prepared(params,studio_timelapse,studio_cfs);
++    if (!prepared.valid) {
++        if (update_fn && !prepared.error.empty())update_fn(PrintingStageCreate,0,prepared.error);
+         return BAMBU_NETWORK_ERR_FILE_NOT_EXIST;
+     }
++    const std::string gcode_path = prepared.path.string();
++    const boost::filesystem::path source_path = params.task_name.empty() ? prepared.original_filename : boost::filesystem::path(params.task_name);
+ 
+     // Extract filename for upload (relative to gcodes root)
+     std::string upload_filename = source_path.filename().string();
+@@ -600,6 +761,9 @@
+ 
+     // SelectMachineDialog blocks printing with "No SD card" unless the storage state is normal.
+     obj->GetStorage()->set_sdcard_state(has_storage.load() ? DevStorage::HAS_SDCARD_NORMAL : DevStorage::NO_SDCARD);
++    // A real Studio bridge capability enables the single existing option.
++    // Generic Moonraker devices retain their original capabilities.
++    obj->is_support_timelapse=status_cache.contains("tlc_capture") && status_cache["tlc_capture"].value("nativeInterception",false);
+ 
+     // Populate module_vers so is_info_ready() passes the version check.
+     // Moonraker printers don't have BBL-style version info, but we need a non-empty map.
+@@ -864,6 +1028,34 @@
+         AmsTrayData tray;
+         tray.slot_index = lane_index;
+         tray.tray_color = safe_json_string(lane_obj, "color");
++        // DeskPrinter appearance is optional. Reuse the upstream multi-color
++        // payload so solid slots and every following gradient retain their order.
++        if (safe_json_string(lane_obj, "_dps_owner") == "deskprinter-studio" &&
++            safe_json_string(lane_obj, "_dps_color_mode") == "gradient" &&
++            lane_obj.contains("_dps_color_stops") && lane_obj["_dps_color_stops"].is_array()) {
++            const auto& stops = lane_obj["_dps_color_stops"];
++            if (stops.size() >= 2 && stops.size() <= 4) {
++                bool valid = true;
++                for (const auto& stop : stops) {
++                    if (!stop.is_string()) {
++                        valid = false;
++                        break;
++                    }
++                    const std::string color = stop.get<std::string>();
++                    if (color.size() != 7 || color.front() != '#' ||
++                        !std::all_of(color.begin() + 1, color.end(), [](unsigned char c) { return std::isxdigit(c); })) {
++                        valid = false;
++                        break;
++                    }
++                    tray.tray_colors.push_back(normalize_color_value(color));
++                }
++                if (valid && tray.tray_colors.size() == stops.size() &&
++                    tray.tray_colors.front() == normalize_color_value(tray.tray_color))
++                    tray.colors_gradient = true;
++                else
++                    tray.tray_colors.clear();
++            }
++        }
+         tray.tray_type = safe_json_string(lane_obj, "material");
+         tray.bed_temp = safe_json_int(lane_obj, "bed_temp");
+         tray.nozzle_temp = safe_json_int(lane_obj, "nozzle_temp");
+@@ -1684,6 +1876,7 @@
+                 }
+ 
+                 // Add toolhead for homing status
++                if (this->available_objects.count("tlc_capture") != 0)subscribe_objects.insert("tlc_capture");
+                 if (this->available_objects.count("toolhead") != 0) {
+                     subscribe_objects.insert("toolhead");
+                 }
+diff --git a/src/slic3r/Utils/MoonrakerToolMapping.hpp b/src/slic3r/Utils/MoonrakerToolMapping.hpp
+new file mode 100644
+--- /dev/null
++++ b/src/slic3r/Utils/MoonrakerToolMapping.hpp
+@@ -0,0 +1,104 @@
++// Modified by DeskPrinter Studio on 2026-10-31: apply per-job CFS tool mapping.
++// Same AGPL-3.0 license as the surrounding OrcaSlicer source.
++#pragma once
++#include <nlohmann/json.hpp>
++#include <algorithm>
++#include <cctype>
++#include <set>
++#include <stdexcept>
++#include <string>
++#include <vector>
++
++namespace Slic3r {
++// Pure preparation helper. No network, firmware state or persistent profile edits.
++class MoonrakerToolMapping {
++    std::vector<int> slots;
++    std::set<int> used;
++    static nlohmann::json parse(const std::string& raw) {
++        auto value=nlohmann::json::parse(raw,nullptr,false);
++        if (!value.is_array() || value.empty() || value.size()>256)
++            throw std::runtime_error("DeskPrinter: missing or invalid CFS filament mapping. Select the spools before sending.");
++        return value;
++    }
++    int physical(int tool) const {
++        if (tool<0 || tool>=static_cast<int>(slots.size()) || slots[tool]<0 || slots[tool]>15)
++            throw std::runtime_error("DeskPrinter: an active filament has no valid CFS slot. Select its spool before sending.");
++        return slots[tool];
++    }
++    // Match only a real T command, never temperatures, comments or substrings.
++    static int tool(const std::string& line, size_t& begin, size_t& end) {
++        size_t pos=line.find_first_not_of(" \t\r");
++        if (pos==std::string::npos || line[pos]==';')return -1;
++        if (line[pos]=='N' || line[pos]=='n') {
++            auto next=line.find_first_of(" \t",pos);
++            if (next==std::string::npos)return -1;
++            pos=line.find_first_not_of(" \t",next);
++            if (pos==std::string::npos || (line[pos]!='T' && line[pos]!='t'))return -1;
++            throw std::runtime_error("DeskPrinter: numbered tool commands must be re-sliced before CFS mapping.");
++        }
++        if (line[pos]!='T' && line[pos]!='t')return -1;
++        begin=++pos;end=pos;
++        if (pos<line.size() && std::isalpha(static_cast<unsigned char>(line[pos])))return -1;
++        while (end<line.size() && std::isdigit(static_cast<unsigned char>(line[end])))++end;
++        if (end==begin || end-begin>3 || (end<line.size() && !std::isspace(static_cast<unsigned char>(line[end])) && line[end]!=';'))
++            throw std::runtime_error("DeskPrinter: unsupported tool command in the print file.");
++        return std::stoi(line.substr(begin,end-begin));
++    }
++public:
++    MoonrakerToolMapping(const std::string& v0, const std::string& v1) {
++        auto mapping=parse(v0);
++        for (const auto& slot:mapping) {
++            if (!slot.is_number_integer() || slot.get<long long>() < -1 || slot.get<long long>()>15)
++                throw std::runtime_error("DeskPrinter: CFS slot outside the supported range.");
++            slots.push_back(slot.get<int>());
++        }
++        if (!v1.empty()) {
++            auto mapping2=parse(v1);
++            if (mapping2.size()!=slots.size())throw std::runtime_error("DeskPrinter: inconsistent CFS mapping versions.");
++            for (size_t i=0;i<slots.size();++i) {
++                const auto& item=mapping2[i];
++                if (!item.is_object() || !item.contains("ams_id") || !item.contains("slot_id") ||
++                    !item["ams_id"].is_number_integer() || !item["slot_id"].is_number_integer())
++                    throw std::runtime_error("DeskPrinter: invalid CFS box/slot mapping.");
++                const auto box=item["ams_id"].get<long long>(), slot=item["slot_id"].get<long long>();
++                if (slots[i]>=0 && (box<0 || box>3 || slot<0 || slot>3 || box*4+slot!=slots[i]))
++                    throw std::runtime_error("DeskPrinter: CFS mapping disagrees about the selected spool.");
++            }
++        }
++    }
++    void inspect(const std::string& line) {
++        size_t begin=0,end=0;int id=tool(line,begin,end);
++        if (id>=0) {physical(id);used.insert(id);}
++    }
++    bool has_tools() const {return !used.empty();}
++    std::string rewrite(const std::string& line) const {
++        size_t begin=0,end=0;int id=tool(line,begin,end);
++        if (id>=0)return line.substr(0,begin)+std::to_string(physical(id))+line.substr(end);
++        // Keep preview colors consistent with the remapped tools. Do not edit
++        // temperatures, extrusion, movement or the user's saved slicer profile.
++        for (const std::string key:{"; filament_colour = ","; extruder_colour = "}) {
++            if (line.rfind(key,0)!=0)continue;
++            std::vector<std::string> colors;size_t start=key.size();
++            do {
++                size_t stop=line.find(';',start);
++                colors.push_back(line.substr(start,stop==std::string::npos?stop:stop-start));
++                if (stop==std::string::npos)break;
++                start=stop+1;
++            } while (true);
++            if (!colors.empty() && !colors.back().empty() && colors.back().back()=='\r')colors.back().pop_back();
++            auto output=colors;
++            for (int logical:used) {
++                if (logical>=static_cast<int>(colors.size()))throw std::runtime_error("DeskPrinter: filament palette is incomplete.");
++                int slot=physical(logical);
++                if (output.size()<=static_cast<size_t>(slot))output.resize(slot+1,"#FFFFFF");
++                output[slot]=colors[logical];
++            }
++            std::string result=key;
++            for (size_t i=0;i<output.size();++i) {if(i)result+=';';result+=output[i];}
++            if (!line.empty() && line.back()=='\r')result+='\r';
++            return result;
++        }
++        return line;
++    }
++};
++}
+diff --git a/tests/fff_print/CMakeLists.txt b/tests/fff_print/CMakeLists.txt
+--- a/tests/fff_print/CMakeLists.txt
++++ b/tests/fff_print/CMakeLists.txt
+@@ -1,3 +1,4 @@
++# Modified by DeskPrint Studio; source notice added 2026-11-11.
+ get_filename_component(_TEST_NAME ${CMAKE_CURRENT_LIST_DIR} NAME)
+ add_executable(${_TEST_NAME}_tests 
+ 	${_TEST_NAME}_tests.cpp
+@@ -5,6 +6,7 @@
+ 	test_helpers.hpp
+ 	test_adaptive_pressure_advance.cpp
+ 	test_cooling.cpp
++	test_creality_hi_cfs.cpp
+ 	test_extrusion_entity.cpp
+ 	test_extrusion_processor.cpp
+ 	test_exclusion_volumes.cpp
+diff --git a/tests/fff_print/test_creality_hi_cfs.cpp b/tests/fff_print/test_creality_hi_cfs.cpp
+new file mode 100644
+--- /dev/null
++++ b/tests/fff_print/test_creality_hi_cfs.cpp
+@@ -0,0 +1,180 @@
++// Modified by DeskPrint Studio, 2026-11-02. Offline synthetic export regression.
++#include <catch2/catch_test_macros.hpp>
++
++#include "libslic3r/Config.hpp"
++#include "libslic3r/Exception.hpp"
++#include "libslic3r/GCodeReader.hpp"
++#include "libslic3r/Model.hpp"
++#include "libslic3r/Print.hpp"
++#include "libslic3r/PrintConfig.hpp"
++#include "libslic3r/TriangleMesh.hpp"
++#include "test_helpers.hpp"
++
++#include <algorithm>
++#include <cmath>
++#include <cstddef>
++#include <cstdlib>
++#include <fstream>
++#include <string>
++#include <vector>
++
++using namespace Slic3r;
++using namespace Slic3r::Test;
++
++static const char *native_change =
++    "G2 Z{z_after_toolchange + 0.4} I0.86 J0.86 P1 F10000 ; native lift\n"
++    "G1 X260 Y180 F30000\nG1 Z{z_after_toolchange} F600\n";
++
++static DynamicPrintConfig hi_config(bool compact, bool relative_e, bool repeated)
++{
++    return multifilament_config(2, {
++        {"printer_model", "Creality Hi"}, {"gcode_flavor", "klipper"},
++        {"single_extruder_multi_material", true}, {"manual_filament_change", false},
++        {"wipe_tower_type", "type2"}, {"enable_prime_tower", true},
++        {"wipe_tower_no_sparse_layers", compact}, {"wipe_tower_sparse_layers_combination", false},
++        {"wipe_tower_x", 40}, {"wipe_tower_y", 150}, {"prime_tower_width", 35},
++        {"printable_area", "0x0,260x0,260x260,0x260"},
++        {"change_filament_gcode", native_change}, {"enable_filament_ramming", false},
++        {"use_relative_e_distances", relative_e}, {"gcode_comments", true},
++        {"layer_height", 0.2}, {"initial_layer_print_height", 0.2},
++        {"sparse_infill_filament_id", 1}, {"internal_solid_filament_id", 1},
++        {"top_shell_layers", 3}, {"bottom_shell_layers", 3},
++        {"top_shell_thickness", 0.}, {"bottom_shell_thickness", 0.},
++        {"top_surface_filament_id", 2}, {"bottom_surface_filament_id", 2},
++        {"outer_wall_filament_id", repeated ? 2 : 1},
++        {"inner_wall_filament_id", repeated ? 2 : 1}, {"timelapse_type", "0"},
++        {"enable_wrapping_detection", false}, {"printable_height", 300}
++    });
++}
++
++static std::string export_hi(const DynamicPrintConfig &config)
++{
++    Print print;
++    Model model;
++    init_print({make_cube(10., 10., 4.)}, print, model, config);
++    print.apply(model, config); // retain the two-filament tower after normalization
++    return gcode(print);
++}
++
++// Compare extrusion instructions and tool identities, not time estimates or a
++// byte-for-byte golden file: additional safe Z travel legitimately changes timing.
++static std::vector<std::string> extrusion_and_tools(const std::string &gcode)
++{
++    std::vector<std::string> result;
++    GCodeReader reader;
++    reader.parse_buffer(gcode, [&](GCodeReader &, const GCodeReader::GCodeLine &line) {
++        const std::string cmd(line.cmd());
++        if ((!cmd.empty() && cmd.front() == 'T') || line.has_e()) {
++            std::string item = cmd;
++            if (line.has_e())
++                item += " E" + std::to_string(line.e());
++            result.push_back(item);
++        }
++    });
++    return result;
++}
++
++static void check_cfs_crossings(bool compact, bool relative_e, bool repeated, double z_offset)
++{
++    auto config = hi_config(compact, relative_e, repeated);
++    config.set_deserialize_strict({{"z_offset", std::to_string(z_offset)}});
++    const std::string safe = export_hi(config);
++    auto baseline_config = config;
++    baseline_config.set_deserialize_strict({{"printer_model", "Unmodified test printer"}});
++    const std::string baseline = export_hi(baseline_config);
++    if (const char *directory = std::getenv("DPS_CFS_FIXTURE_DIR")) {
++        const std::string stem = std::string(directory) + "/cfs-" + std::to_string(compact) +
++            std::to_string(relative_e) + std::to_string(repeated) + "-" + std::to_string(z_offset);
++        std::ofstream(stem + "-safe.gcode", std::ios::binary) << safe;
++        std::ofstream(stem + "-baseline.gcode", std::ios::binary) << baseline;
++    }
++    CHECK(extrusion_and_tools(safe) == extrusion_and_tools(baseline));
++    // Negative control: this synthetic compacted tower must expose the original
++    // low station crossing, otherwise the clearance assertions could be vacuous.
++    if (compact && !repeated) {
++        double object_z = z_offset;
++        bool tower = false;
++        size_t unsafe = 0;
++        GCodeReader original;
++        original.apply_config(baseline_config);
++        original.parse_buffer(baseline, [&](GCodeReader &state, const GCodeReader::GCodeLine &line) {
++            const std::string comment(line.comment());
++            if (comment.find("TYPE:") != std::string::npos || comment.find("FEATURE:") != std::string::npos)
++                tower = comment.find("tower") != std::string::npos || comment.find("Tower") != std::string::npos;
++            if (line.extruding(state) && !tower)
++                object_z = std::max(object_z, double(line.new_Z(state)));
++            if (tower && line.has_x() && std::abs(line.x() - 260.f) < 0.001f &&
++                double(line.new_Z(state)) + 0.001 < object_z)
++                ++unsafe;
++        });
++        REQUIRE(unsafe > 0);
++    }
++
++    size_t station_visits = 0, return_lifts = 0, tower_restores = 0;
++    double highest_object = z_offset;
++    bool on_tower = false, returning = false;
++    float station_x = 0, station_y = 0;
++    GCodeReader reader;
++    reader.apply_config(config);
++    reader.parse_buffer(safe, [&](GCodeReader &state, const GCodeReader::GCodeLine &line) {
++        const std::string comment(line.comment());
++        if (comment.find("TYPE:") != std::string::npos || comment.find("FEATURE:") != std::string::npos)
++            on_tower = comment.find("tower") != std::string::npos || comment.find("Tower") != std::string::npos;
++        if (line.extruding(state) && !on_tower)
++            highest_object = std::max(highest_object, double(line.new_Z(state)));
++        if (on_tower && line.cmd() == "G1" && line.has_x() && line.has_y() &&
++            std::abs(line.x() - 260.f) < 0.001f && std::abs(line.y() - 180.f) < 0.001f) {
++            ++station_visits;
++            CHECK(double(line.new_Z(state)) + 0.001 >= highest_object + 0.4);
++            station_x = line.x(); station_y = line.y();
++        }
++        if (comment.find("DeskPrint CFS return clearance") != std::string::npos) {
++            ++return_lifts;
++            CHECK(double(line.new_Z(state)) + 0.001 >= highest_object + 0.4);
++            returning = true;
++        } else if (returning && (line.has_x() || line.has_y())) {
++            CHECK(double(line.new_Z(state)) + 0.001 >= highest_object + 0.4);
++            CHECK_FALSE(line.extruding(state));
++            returning = false;
++        }
++        if (comment.find("Force restore layer Z") != std::string::npos) {
++            ++tower_restores;
++            CHECK_FALSE(returning);
++            CHECK(std::abs(state.x() - station_x) + std::abs(state.y() - station_y) > 1.f);
++        }
++    });
++    REQUIRE(station_visits > 0);
++    CHECK(return_lifts == station_visits);
++    CHECK(tower_restores == station_visits);
++    CHECK_FALSE(returning);
++}
++
++TEST_CASE("Hi CFS compact relative late change", "[CrealityHiCfsTravel]")
++{ check_cfs_crossings(true, true, false, 0.); }
++TEST_CASE("Hi CFS compact absolute offset late change", "[CrealityHiCfsTravel]")
++{ check_cfs_crossings(true, false, false, 0.15); }
++TEST_CASE("Hi CFS compact relative repeated changes", "[CrealityHiCfsTravel]")
++{ check_cfs_crossings(true, true, true, 0.15); }
++TEST_CASE("Hi CFS compact absolute repeated changes", "[CrealityHiCfsTravel]")
++{ check_cfs_crossings(true, false, true, 0.); }
++TEST_CASE("Hi CFS normal relative late change", "[CrealityHiCfsTravel]")
++{ check_cfs_crossings(false, true, false, 0.); }
++TEST_CASE("Hi CFS normal absolute repeated changes", "[CrealityHiCfsTravel]")
++{ check_cfs_crossings(false, false, true, 0.15); }
++
++TEST_CASE("Hi CFS refuses unknown station macros and insufficient Z clearance", "[CrealityHiCfsTravel]")
++{
++    auto config = hi_config(true, true, false);
++    SECTION("custom code is not silently rewritten") {
++        config.set_deserialize_strict({{"change_filament_gcode", "G1 X260 Y180\n"}});
++        CHECK_THROWS_AS(export_hi(config), Slic3r::RuntimeError);
++    }
++    SECTION("no room for the native 0.4 mm lift") {
++        config.set_deserialize_strict({{"printable_height", 4.1}});
++        CHECK_THROWS_AS(export_hi(config), Slic3r::RuntimeError);
++    }
++    SECTION("a renamed display preset keeps the stable model capability") {
++        config.set_deserialize_strict({{"printer_settings_id", "A printer chosen by its user"}});
++        CHECK(export_hi(config).find("DeskPrint CFS return clearance") != std::string::npos);
++    }
++}
+diff --git a/src/slic3r/Utils/MoonrakerPrinterAgent.hpp b/src/slic3r/Utils/MoonrakerPrinterAgent.hpp
+--- a/src/slic3r/Utils/MoonrakerPrinterAgent.hpp
++++ b/src/slic3r/Utils/MoonrakerPrinterAgent.hpp
+@@ -1,3 +1,4 @@
++// Modified by DeskPrint Studio; source notice added 2026-11-11.
+ #ifndef __MOONRAKER_PRINTER_AGENT_HPP__
+ #define __MOONRAKER_PRINTER_AGENT_HPP__
+ 

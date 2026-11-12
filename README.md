@@ -9,6 +9,8 @@ maintained separately and are not included in this repository.
 - [Creality Hi open components](sources/creality/hi/README.md): GPL printer and
   Moonraker bridges, MIT filament inventory publisher,
   license texts, build instructions and per-file SHA-256 inventory.
+- [OrcaSlicer patch](sources/orca/deskprint-345efec/README.md): exact modified source,
+  cumulative AGPL patch and source-only release materials.
 - [Source index](SOURCE_INDEX.json): exact exported snapshot and provenance.
 - [License scope](LICENSES.md): licenses apply per component, not to the entire
   DeskPrint product.
