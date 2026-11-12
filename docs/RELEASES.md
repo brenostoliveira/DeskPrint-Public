@@ -35,11 +35,13 @@ does not authorize an executable. Clients verify that version's catalog and
 signature against the keys already included in the application, then verify the
 payload and its per-file inventory. Local maintenance packages remain supported.
 
-A version-specific small Web Setup downloads the audited full installer instead
-of embedding the application. Its expected installer size/hash and version URL
-are compiled into the bootstrap. Download pages/store uploads must use the current
-bootstrap; a version-specific bootstrap does not silently trust newer binaries.
-The language and destination chosen there are forwarded to the full installer.
+The current minimal installer is a native frontend which chooses language,
+shows the terms and asks for the installation directory, then downloads the
+selected signed payload and installs its verified files. It does not contain
+the full application. It resolves the public signed channel using embedded
+trusted verification keys; it does not trust arbitrary downloaded binaries.
+Older version-specific Web Setup bootstraps are historical and are not the
+current store download. No new client binary is announced by this source update.
 
 Updates replace application-owned binaries using the new inventory. Obsolete
 owned files are removed only after success is confirmed; rollback material is
@@ -51,6 +53,11 @@ notices and source history are retained.
 The transport/bootstrap implementation is prepared in the private build project.
 Remote binary publication remains pending exact-package distribution review;
 this document is not an announcement that those assets are already downloadable.
+
+The repository now also provides an exact Orca patch source directory and the
+source-only `orca-source-2026.11.12` release. Its inventory lists 42 archives/
+notice/inventory assets, with SHA-256 verified against GitHub's asset digests.
+It includes no client binaries and does not change the Desktop update pointer.
 
 The initial repository setup publishes open source only. It does not enable
 remote update discovery in the installed Desktop, upload existing installers,

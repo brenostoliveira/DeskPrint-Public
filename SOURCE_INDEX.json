@@ -7,5 +7,15 @@
   "publicFiles": 13,
   "binaryReleasesPublished": false,
   "originalArchiveSha256": "51d34ed2ec22bb8af40737a7a9274bb81e8fbc17c2ef3c6fe2fd1226144df877",
-  "selection": "without-qrcode"
+  "selection": "without-qrcode",
+  "additionalComponents": [
+    {
+      "component": "orca-slicer-deskprint-patch",
+      "baseRevision": "345efec64c7b95a05ce5cf96df0dde66a158835c",
+      "sourceRoot": "sources/orca/deskprint-345efec",
+      "manifestSha256": "c5fad8240ee4aee148b58ca6fe76b72575ac56c834fb9dad9c4b0c153a1203df",
+      "sourceRelease": "https://github.com/brenostoliveira/DeskPrint-Public/releases/tag/orca-source-2026.11.12",
+      "clientBinariesPublished": false
+    }
+  ]
 }
