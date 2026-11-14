@@ -1,47 +1,51 @@
-# DeskPrint public components and releases
+# DeskPrint Studio
 
-Public source components, license notices and the distribution location for
-DeskPrint Studio updates. The main Desktop and mobile application sources are
-maintained separately and are not included in this repository.
+Public downloads, open components, original license notices and corresponding
+source materials for the DeskPrint ecosystem. Proprietary Desktop/mobile sources,
+private management services, credentials and signing keys are not distributed here.
 
-## Available source
+## Install DeskPrint Studio
 
-- [Creality Hi open components](sources/creality/hi/README.md): GPL printer and
-  Moonraker bridges, MIT filament inventory publisher,
-  license texts, build instructions and per-file SHA-256 inventory.
-- [OrcaSlicer patch](sources/orca/deskprint-345efec/README.md): exact modified source,
-  cumulative AGPL patch and source-only release materials.
-- [Source index](SOURCE_INDEX.json): exact exported snapshot and provenance.
-- [License scope](LICENSES.md): licenses apply per component, not to the entire
+[Download the minimal Windows installer](https://github.com/brenostoliveira/DeskPrint-Public/releases/latest/download/DeskPrint-Installer-x64.exe).
+
+The installer lets you choose a language and destination, presents the terms and
+downloads the current signed application package. Installation and updates verify
+the catalog signature and file hashes against the trusted keys already bundled
+with the installer. No full offline client installer is required.
+
+[Installer releases](https://github.com/brenostoliveira/DeskPrint-Public/releases)
+provide the minimal installer. Separately named technical releases provide signed
+Desktop/Aurora payloads and catalogs for the existing update clients. Their URLs
+are preserved for compatibility; use the normal application maintenance flow.
+
+## Open components
+
+- [Creality Hi source snapshot](sources/creality/hi/README.md): historical exported
+  open bridges, original notices and build information. Exact distributed versions
+  are available in the source library below.
+- [OrcaSlicer patch](sources/orca/deskprint-345efec/README.md): modified source,
+  cumulative patch and component documentation.
+- [Initial snapshot provenance](SOURCE_INDEX.json).
+- [License scope](LICENSES.md): licenses apply per component, not to the complete
   DeskPrint product.
+- [Distribution layout and verification](docs/RELEASES.md).
 
-The source snapshot matches the open-component export of printer package
-`2026.11.08.2`. The optional qrcode dependency is excluded at the owner's request. The source
-manifest describes the filtered files actually published; this is not the
-complete original export. Printer runtime changes are maintained separately.
+Source snapshots are not complete firmware images. They do not authorize copying
+modules onto a running printer or imply physical validation for every device.
+Third-party product names identify compatibility, without manufacturer endorsement.
 
-## Updates
+## Source code, licenses and build instructions
 
-[GitHub Releases](https://github.com/brenostoliveira/DeskPrint-Public/releases)
-is the intended public location for approved update packages, signatures and
-matching source archives. No binary release is published by this initial setup.
-See [release requirements](docs/RELEASES.md).
+[Open the permanent source library](https://github.com/brenostoliveira/DeskPrint-Public/releases/tag/sources-and-licenses).
 
-The installed Desktop keeps its local channel until a release containing public
-channel support is installed. That transport and a small online installer are
-being prepared; no remotely installable binary is announced by this source update.
+This dedicated release contains corresponding source archives, original notices,
+build recipes and replacement instructions for distributed components, including
+Qt/PySide, FFmpeg, OrcaSlicer and the open Aurora bridges. Installer releases do
+not need duplicate source attachments.
 
-## Scope
-
-This source snapshot is not a complete printer firmware image or an installer.
-Do not copy it onto a running printer without understanding the applicable host,
-configuration and installation instructions. Source availability does not imply
-hardware validation, compatibility with every printer or commercial clearance
-of a complete DeskPrint distribution.
-
-Additional component and dependency sources will be associated with the exact
-binary releases to which they belong. This initial repository does not claim
-complete corresponding-source coverage for every DeskPrint product or patch.
-
-DeskPrint is an independent project. Third-party product names identify compatible
-components and do not imply endorsement by their manufacturers.
+Desktop bundles contain `BUNDLE-INVENTORY.json` with original filenames, sizes and
+SHA-256 hashes. `HISTORICAL-MATERIALS.json` maps previous Desktop versions to their
+exact corresponding members. Extract a mapped member under its original name
+before following that version's build instructions. Aurora and Orca materials
+retain their versioned names and original notices. Modification, replacement and
+debugging rights granted by applicable third-party licenses remain preserved.
