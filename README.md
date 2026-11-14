@@ -43,6 +43,10 @@ build recipes and replacement instructions for distributed components, including
 Qt/PySide, FFmpeg, OrcaSlicer and the open Aurora bridges. Installer releases do
 not need duplicate source attachments.
 
+DeskPrint uses [FFmpeg](https://ffmpeg.org/) under
+[LGPL 2.1 or later](https://www.gnu.org/licenses/old-licenses/lgpl-2.1.html).
+Its corresponding source and original notices are included in that library.
+
 Desktop bundles contain `BUNDLE-INVENTORY.json` with original filenames, sizes and
 SHA-256 hashes. `HISTORICAL-MATERIALS.json` maps previous Desktop versions to their
 exact corresponding members. Extract a mapped member under its original name
